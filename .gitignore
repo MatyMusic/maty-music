@@ -1,0 +1,66 @@
+# dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# testing
+/coverage
+
+# production
+/.next/
+/out/
+
+# misc
+.DS_Store
+*.local
+
+# env files
+.env*
+!.env.example
+
+
+
+# ===== Core =====
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=put_new_random_secret_here
+
+# MongoDB (של סביבת dev)
+MONGODB_URI=mongodb+srv://maty_dev:REPLACE@matymusic-dev.xxxxx.mongodb.net/maty?retryWrites=true&w=majority
+
+# Google OAuth (פרויקט dev בגוגל)
+GOOGLE_CLIENT_ID=3728...apps.googleusercontent.com
+GOOGLE_CLIENT_SECRET=GOCSPX-...
+
+# ===== Public (Client-Side) =====
+NEXT_PUBLIC_DISABLE_SPLASH=1
+
+# PayPal (Sandbox עדיף בפיתוח)
+NEXT_PUBLIC_PAYPAL_CLIENT_ID=YOUR_SANDBOX_CLIENT_ID
+NEXT_PUBLIC_PAYPAL_ENV=sandbox
+
+# ===== Email / SMTP =====
+CONTACT_TO=matymusic770@gmail.com
+CONTACT_FROM="MATY-MUSIC Robot <no-reply@maty-music.local>"
+
+BOOK_TO=matymusic770@gmail.com
+BOOK_FROM="MATY-MUSIC Robot <no-reply@maty-music.local>"
+
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@gmail.com
+SMTP_PASS=YOUR_GMAIL_APP_PASSWORD
+INVOICES_FROM="MATY MUSIC <your@gmail.com>"
+
+# ===== Israel Gateways (sandbox) =====
+TRANZILA_SUPPLIER=your_supplier_name
+TRANZILA_SANDBOX=true
+
+CARDCOM_TERMINAL_NUMBER=1234
+CARDCOM_USER=api_user
+CARDCOM_API_KEY=xxxx
+CARDCOM_SANDBOX=true
+
+# ===== WhatsApp (אם צריך בפיתוח) =====
+WA_ACCESS_TOKEN=DEV_OR_EMPTY
+WA_PHONE_NUMBER_ID=DEV_OR_EMPTY
+WA_TO=+972547700019
