@@ -1,33 +1,39 @@
+// src/app/api/orders/record/route.ts
 import { NextResponse } from "next/server";
-import dbConnect from "@/lib/mongo";
-import Order from "@/models/Order";
+import { getDb } from "@/lib/mongo";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
-  await dbConnect();
+  const db = await getDb(); // זה מחכה לחיבור ונותן לך את ה־DB
   const body = await req.json();
-  const {
-    orderId,
-    amountILS,
-    description,
-    customer,
-    captureId,
-    paypalRaw,
-    invoiceNumber,
-  } = body;
+  const { orderId, userId, amount, items, status } = body ?? {};
 
-  const doc = await Order.findOneAndUpdate(
+  if (!orderId || !userId || !amount) {
+    return NextResponse.json(
+      { ok: false, error: "Missing fields" },
+      { status: 400 }
+    );
+  }
+
+  const orders = db.collection("orders");
+
+  // אם כבר קיים אותו orderId נעדכן במקום ליצור כפילויות
+  await orders.updateOne(
     { orderId },
     {
-      orderId,
-      amountILS,
-      description,
-      status: "paid",
-      paypal: { captureId, raw: paypalRaw },
-      customer,
-      invoiceNumber,
+      $set: {
+        userId,
+        amount,
+        items: Array.isArray(items) ? items : [],
+        status: status ?? "pending",
+        updatedAt: new Date(),
+      },
+      $setOnInsert: { createdAt: new Date() },
     },
-    { upsert: true, new: true }
+    { upsert: true }
   );
 
-  return NextResponse.json({ ok: true, id: doc._id });
+  return NextResponse.json({ ok: true });
 }
