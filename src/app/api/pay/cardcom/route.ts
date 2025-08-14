@@ -1,36 +1,58 @@
-// // src/app/api/pay/cardcom/route.ts
-// import { NextResponse } from "next/server";
+// src/app/api/pay/cardcom/route.ts
+import { NextRequest } from "next/server";
 
-// export async function POST(req: Request) {
-//   if (!process.env.CARDCOM_TERMINAL_NUMBER) {
-//     return NextResponse.json(
-//       { ok: false, error: "CARDCOM_TERMINAL_NUMBER missing" },
-//       { status: 400 }
-//     );
-//   }
-//   const body = await req.json().catch(() => ({}));
-//   const amount = Number(body?.breakdown?.total ?? body?.total ?? 0);
-//   if (!amount)
-//     return NextResponse.json(
-//       { ok: false, error: "amount missing" },
-//       { status: 400 }
-//     );
+// מוודא שזה "מודול" מבחינת TS וגם אומר ל-Next שזה רץ בדינמי/Node
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
-//   const isSandbox = String(process.env.CARDCOM_SANDBOX ?? "true") === "true";
-//   const base = isSandbox
-//     ? "https://secure.cardcom.solutions/External/Charges/Charge.aspx"
-//     : "https://secure.cardcom.solutions/External/Charges/Charge.aspx";
+// טיפוס גוף מינימלי לבקשה (תוכל להרחיב בהמשך)
+export type CardcomInitBody = {
+  amount: number; // בסכום שקלים (לא אגורות)
+  currency?: string; // ILS ברירת מחדל
+  description?: string; // תיאור עסקה
+};
 
-//   const params = new URLSearchParams({
-//     TerminalNumber: String(process.env.CARDCOM_TERMINAL_NUMBER),
-//     // User: process.env.CARDCOM_USER ?? '',
-//     // APIKey: process.env.CARDCOM_API_KEY ?? '',
-//     Amount: String(amount),
-//     Currency: "ILS",
-//     Language: "he",
-//     // SuccessRedirectUrl: `${origin}/checkout/success`,
-//     // ErrorRedirectUrl: `${origin}/checkout/cancel`,
-//   });
-//   const url = `${base}?${params.toString()}`;
-//   return NextResponse.json({ ok: true, url });
-// }
+// פונקציה שיכולה לשמש גם בצד לקוח אם מייבאים — כרגע מחזירה payload בסיסי
+export function makeCardcomInitPayload(body: CardcomInitBody) {
+  const amountAgorot = Math.round((body.amount ?? 0) * 100);
+  return {
+    amount: amountAgorot,
+    currency: body.currency ?? "ILS",
+    description: body.description ?? "MATY MUSIC",
+  };
+}
+
+// אפשר לחסום GET (לא חובה)
+export async function GET() {
+  return new Response("Method Not Allowed", { status: 405 });
+}
+
+// ה-API עצמו — בפריוויו/ללא מפתחות נחזיר 501 כדי לא ליפול
+export async function POST(req: NextRequest) {
+  const SANDBOX = process.env.CARDCOM_SANDBOX === "true";
+  const TERMINAL = process.env.CARDCOM_TERMINAL_NUMBER;
+  const USER = process.env.CARDCOM_USER;
+  const KEY = process.env.CARDCOM_API_KEY;
+
+  // אם אין קונפיג מלא, או שאנחנו בפריוויו — לא נבצע חיוב אמיתי
+  if (!TERMINAL || !USER || !KEY || SANDBOX) {
+    return Response.json(
+      {
+        ok: false,
+        error: "Cardcom disabled in preview (missing config or SANDBOX=true).",
+      },
+      { status: 501 }
+    );
+  }
+
+  // קריאה אמיתית (תמומש בהמשך):
+  const body = (await req.json()) as CardcomInitBody;
+  const payload = makeCardcomInitPayload(body);
+
+  // TODO: שליחה ל-Cardcom לפי ה-API שלהם (fetch ל-endpoint עם payload)
+  // כרגע מחזירים 501 כדי לא לבצע חיוב אמיתי בפרוד/פריוויו
+  return Response.json(
+    { ok: false, error: "Cardcom integration not implemented yet.", payload },
+    { status: 501 }
+  );
+}
