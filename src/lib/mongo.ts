@@ -1,24 +1,27 @@
 // src/lib/mongo.ts
 import { MongoClient } from "mongodb";
 
-const uri = process.env.MONGODB_URI!;
-if (!uri) throw new Error("Missing MONGODB_URI");
+const uri = process.env.MONGODB_URI ?? ""; // ← לא זורקים שגיאה כאן
 
-// שומר חיבור יחיד גם בזמן HMR
 declare global {
   // eslint-disable-next-line no-var
   var _mongoClientPromise: Promise<MongoClient> | undefined;
 }
 
-const client = new MongoClient(uri);
+function connect(): Promise<MongoClient> {
+  if (!uri) {
+    return Promise.reject(new Error("Missing MONGODB_URI"));
+  }
+  const client = new MongoClient(uri);
+  return client.connect();
+}
 
 const mongoPromise: Promise<MongoClient> =
-  global._mongoClientPromise ?? (global._mongoClientPromise = client.connect());
+  global._mongoClientPromise ?? (global._mongoClientPromise = connect());
 
 export default mongoPromise;
 
-// עוזר נוח להביא DB לשימוש ב־API/Actions
 export async function getDb(name?: string) {
-  const c = await mongoPromise;
+  const c = await mongoPromise; // אם אין MONGODB_URI – כאן תתקבל שגיאה ברורה בזמן ריצה, לא בזמן build
   return name ? c.db(name) : c.db();
 }
