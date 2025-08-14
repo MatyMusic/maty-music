@@ -80,9 +80,12 @@ function useSmartUrl(candidates: string[]) {
 function AvatarPlane({ src, mouseTarget, seed = 0 }: { src: string; mouseTarget: THREE.Vector2; seed?: number; }) {
   const tex = useTexture(src);
   const maxAniso = useThree((s) => s.gl.capabilities.getMaxAnisotropy());
+
   useEffect(() => {
-    if ("colorSpace" in tex) (tex as any).colorSpace = (THREE as any).SRGBColorSpace ?? (THREE as any).sRGBEncoding;
-    else if ("encoding" in tex && "sRGBEncoding" in THREE) (tex as any).encoding = (THREE as any).sRGBEncoding;
+    // Three r179+: להשתמש ב-colorSpace בלבד
+    if ("colorSpace" in tex && (THREE as any).SRGBColorSpace) {
+      (tex as any).colorSpace = (THREE as any).SRGBColorSpace;
+    }
     tex.anisotropy = Math.min(16, maxAniso || 16);
     tex.generateMipmaps = true;
     tex.minFilter = THREE.LinearMipmapLinearFilter;
@@ -215,8 +218,10 @@ function AvatarCard({ cat, i }: { cat: Cat; i: number }) {
               camera={{ position: [0, 0.7, 2.2], fov: 35 }}
               gl={{ antialias: true, alpha: true }}
               onCreated={({ gl }) => {
-                if ("outputColorSpace" in gl && (THREE as any).SRGBColorSpace) (gl as any).outputColorSpace = (THREE as any).SRGBColorSpace;
-                else if ("outputEncoding" in gl && (THREE as any).sRGBEncoding) (gl as any).outputEncoding = (THREE as any).sRGBEncoding;
+                // Three r179+: להשתמש ב-outputColorSpace בלבד
+                if ("outputColorSpace" in gl && (THREE as any).SRGBColorSpace) {
+                  (gl as any).outputColorSpace = (THREE as any).SRGBColorSpace;
+                }
               }}
             >
               <Suspense fallback={null}>
@@ -263,19 +268,48 @@ const CTAS = [
 function FancyCard({ href, title, subtitle, emoji, i }: (typeof CTAS)[number] & { i: number }) {
   const isPricing = href === "/pricing";
   return (
-    <motion.div initial={{ opacity: 0, y: 22, scale: 0.985 }} whileInView={{ opacity: 1, y: 0, scale: 1 }} viewport={{ once: true, amount: 0.35 }} transition={{ type: "spring", stiffness: 120, damping: 16, delay: i * 0.05 }} className="relative">
-      <motion.div aria-hidden className="pointer-events-none absolute -inset-2 -z-10 rounded-3xl blur-2xl" animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 24 + i * 4, ease: "linear" }}
-        style={{ background: isPricing ? "conic-gradient(from 0deg, rgba(99,102,241,0.45), rgba(236,72,153,0.35), rgba(99,102,241,0.45))" : "radial-gradient(closest-side, rgba(99,102,241,0.25), rgba(99,102,241,0) 70%)" }} />
-      <Link href={href} className="group block rounded-2xl border p-5 shadow-md backdrop-blur transition-all bg-white/70 dark:bg-neutral-900/70 border-black/10 dark:border-white/10 hover:shadow-lg hover:scale-[1.01]" style={{ transformStyle: "preserve-3d" }}>
-        <div className="mb-3 grid h-12 w-12 place-items-center rounded-xl text-2xl shadow-inner transition-transform group-hover:-translate-y-0.5" style={{ background: "radial-gradient(closest-side, rgba(255,255,255,0.9), rgba(255,255,255,0.45))", transform: "translateZ(24px)" }}>
+    <motion.div
+      initial={{ opacity: 0, y: 22, scale: 0.985 }}
+      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      viewport={{ once: true, amount: 0.35 }}
+      transition={{ type: "spring", stiffness: 120, damping: 16, delay: i * 0.05 }}
+      className="relative"
+    >
+      <motion.div
+        aria-hidden
+        className="pointer-events-none absolute -inset-2 -z-10 rounded-3xl blur-2xl"
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 24 + i * 4, ease: "linear" }}
+        style={{
+          background: isPricing
+            ? "conic-gradient(from 0deg, rgba(99,102,241,0.45), rgba(236,72,153,0.35), rgba(99,102,241,0.45))"
+            : "radial-gradient(closest-side, rgba(99,102,241,0.25), rgba(99,102,241,0) 70%)",
+        }}
+      />
+      <Link
+        href={href}
+        className="group block rounded-2xl border p-5 shadow-md backdrop-blur transition-all bg-white/70 dark:bg-neutral-900/70 border-black/10 dark:border-white/10 hover:shadow-lg hover:scale-[1.01]"
+        style={{ transformStyle: "preserve-3d" }}
+      >
+        <div
+          className="mb-3 grid h-12 w-12 place-items-center rounded-xl text-2xl shadow-inner transition-transform group-hover:-translate-y-0.5"
+          style={{
+            background: "radial-gradient(closest-side, rgba(255,255,255,0.9), rgba(255,255,255,0.45))",
+            transform: "translateZ(24px)",
+          }}
+        >
           <span aria-hidden>{emoji}</span>
         </div>
         <div style={{ transform: "translateZ(18px)" }}>
           <h3 className="text-lg font-extrabold tracking-tight">{title}</h3>
           <p className="mt-1 text-sm opacity-80">{subtitle}</p>
         </div>
-        <div className="mt-4 inline-flex items-center gap-2 text-sm font-semibold opacity-90 transition group-hover:opacity-100" style={{ transform: "translateZ(12px)" }}>
-          <span>פתח</span><span aria-hidden className="transition-transform group-hover:translate-x-0.5">↗</span>
+        <div
+          className="mt-4 inline-flex items-center gap-2 text-sm font-semibold opacity-90 transition group-hover:opacity-100"
+          style={{ transform: "translateZ(12px)" }}
+        >
+          <span>פתח</span>
+          <span aria-hidden className="transition-transform group-hover:translate-x-0.5">↗</span>
         </div>
       </Link>
     </motion.div>
@@ -297,8 +331,12 @@ export default function HomePage() {
       {/* CTA תחתון (לא חובה) */}
       <section className="relative z-10 mx-auto max-w-6xl px-4 py-10 md:py-14">
         <div className="mb-6 text-right">
-          <motion.h2 initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ duration: 0.5 }} className="text-2xl font-extrabold md:text-3xl">לאן ממשיכים?</motion.h2>
-          <motion.p initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ duration: 0.5, delay: 0.1 }} className="mt-1 opacity-80">בחרו יעד ותמשיכו לחקור את MATY MUSIC.</motion.p>
+          <motion.h2 initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ duration: 0.5 }} className="text-2xl font-extrabold md:text-3xl">
+            לאן ממשיכים?
+          </motion.h2>
+          <motion.p initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ duration: 0.5, delay: 0.1 }} className="mt-1 opacity-80">
+            בחרו יעד ותמשיכו לחקור את MATY MUSIC.
+          </motion.p>
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
           {CTAS.map((c, i) => (<FancyCard key={c.href} {...c} i={i} />))}

@@ -1,12 +1,16 @@
 // src/app/(site)/about/page.tsx
-export const metadata = {
-  title: 'על MATY-MUSIC',
-  description: 'אודות — מתי גורפינקל (MG) והפרויקט MATY-MUSIC',
-}
+import type { Metadata } from "next";
+import Link from "next/link";
+import Image from "next/image";
+
+export const metadata: Metadata = {
+  title: "על MATY-MUSIC",
+  description: "אודות — מתי גורפינקל (MG) והפרויקט MATY-MUSIC",
+};
 
 export default function AboutPage() {
   return (
-    <section className="section-padding">
+    <section className="section-padding" dir="rtl">
       <div className="container-section">
         <div className="card">
           <div className="flex items-start justify-between gap-6">
@@ -46,19 +50,22 @@ export default function AboutPage() {
               </div>
 
               <div className="mt-6 flex flex-wrap justify-end gap-2">
-                <a href="/#contact" className="btn">צור קשר</a>
-                <a href="/#demos" className="btn">דמואים</a>
+                <Link href="/#contact" className="btn">צור קשר</Link>
+                <Link href="/#demos" className="btn">דמואים</Link>
               </div>
             </div>
 
-            <img
+            <Image
               src="/assets/logo/mg-mark.svg"
               alt="MG Logo"
+              width={144}          // רוחב בסיסי (יש גם מחלקות גודל)
+              height={144}         // גובה בסיסי
+              priority
               className="w-28 md:w-36 h-auto opacity-90"
             />
           </div>
         </div>
       </div>
     </section>
-  )
+  );
 }

@@ -36,14 +36,26 @@ const fmt = (s: number) => {
 
 export default function MiniPlayer({ track }: { track: MiniTrack }) {
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const { level: beat } = useAudioBeat({ audioRef, fftSize: 1024, smoothing: 0.85, boost: 1.1, lowBins: 28 });
+
+  // Beat/Visualizer source
+  const { level: beat } = useAudioBeat({
+    audioRef,
+    fftSize: 1024,
+    smoothing: 0.85,
+    boost: 1.1,
+    lowBins: 28,
+  });
 
   const [playing, setPlaying] = useState(false);
   const [liked, setLiked] = useState(false);
   const [t, setT] = useState(0);
   const [dur, setDur] = useState(0);
 
-  // לייק ל־localStorage (פר־טראק)
+  // ---- Hydration-safe flag ----
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
+  // לייקים מה־localStorage
   useEffect(() => {
     try {
       const raw = localStorage.getItem("mm_likes");
@@ -64,18 +76,21 @@ export default function MiniPlayer({ track }: { track: MiniTrack }) {
     } catch {}
   };
 
-  // אירועים על האודיו
+  // אירועי אודיו
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
     const onLoaded = () => setDur(el.duration || 0);
     const onTime = () => setT(el.currentTime || 0);
     const onEnded = () => setPlaying(false);
+
     el.addEventListener("loadedmetadata", onLoaded);
     el.addEventListener("timeupdate", onTime);
     el.addEventListener("ended", onEnded);
+
     el.src = track.src;
     el.load();
+
     return () => {
       el.removeEventListener("loadedmetadata", onLoaded);
       el.removeEventListener("timeupdate", onTime);
@@ -88,7 +103,7 @@ export default function MiniPlayer({ track }: { track: MiniTrack }) {
     if (!el) return;
     if (el.paused) {
       el.play().then(() => setPlaying(true)).catch(() => {});
-      // שדר גלובלי – כדי שנוכל לסנכרן עם ProPlayer בהמשך
+      // שדר ארוע גלובלי – כדי לפתוח את הנגן הצף
       window.dispatchEvent(new CustomEvent("mm:play", { detail: { track } }));
     } else {
       el.pause();
@@ -104,36 +119,43 @@ export default function MiniPlayer({ track }: { track: MiniTrack }) {
     setT(el.currentTime);
   };
 
-  // ויזואליזר קטן (8 עמודות)
+  // ---- Visualizer: SSR-safe ----
   const bars = 8;
   const levels = useMemo(() => Array.from({ length: bars }, (_, i) => (i + 1) / bars), []);
-  const now = typeof performance !== "undefined" ? performance.now() : 0;
-  const heights = levels.map((w, i) => {
-    const jitter = Math.sin(now / 240 + i) * 0.06 + 0.04;
-    return Math.min(1, Math.max(0.05, beat * (0.35 + w * 0.7) + jitter));
-  });
+  const baseHeights = useMemo(() => Array(bars).fill(0.05), []); // SSR/first render
+  const heights = useMemo(() => {
+    if (!mounted) return baseHeights;
+    const now = performance.now();
+    return levels.map((w, i) => {
+      const jitter = Math.sin(now / 240 + i) * 0.06 + 0.04;
+      return Math.min(1, Math.max(0.05, beat * (0.35 + w * 0.7) + jitter));
+    });
+  }, [mounted, levels, beat, baseHeights]);
 
   return (
     <div
       className="rounded-xl border border-black/10 dark:border-white/10 bg-white/70 dark:bg-neutral-900/70 backdrop-blur px-3 py-2 shadow-sm"
-      onClick={(e) => e.stopPropagation()} // לא לנווט לקישור הקובייה
+      onClick={(e) => e.stopPropagation()} // שלא ילחץ את ה-Link של הקובייה
       onMouseDown={(e) => e.stopPropagation()}
     >
       <audio ref={audioRef} preload="metadata" />
 
       <div className="flex items-center gap-3">
-        {/* עטיפה */}
+        {/* עטיפה + ברים זעירים */}
         <div className="relative h-10 w-10 overflow-hidden rounded-md border border-black/10 dark:border-white/10 shrink-0">
           <img
             src={track.cover ?? "/assets/logo/maty-music-wordmark.svg"}
             alt={track.title}
             className="h-full w-full object-cover"
           />
-          {/* ברים זעירים */}
           <div className="absolute inset-x-0 bottom-0 h-1 px-1 pb-[2px]">
             <div className="flex h-full items-end gap-[1px] opacity-80">
               {heights.map((h, i) => (
-                <div key={i} className="w-full rounded-sm bg-gradient-to-t from-violet-500/70 to-pink-500/70" style={{ height: `${h * 100}%` }} />
+                <div
+                  key={i}
+                  className="w-full rounded-sm bg-gradient-to-t from-violet-500/70 to-pink-500/70"
+                  style={{ height: `${h * 100}%` }}
+                />
               ))}
             </div>
           </div>
@@ -148,13 +170,16 @@ export default function MiniPlayer({ track }: { track: MiniTrack }) {
         {/* כפתורים */}
         <div className="flex items-center gap-1.5">
           <button
-            className={`grid h-8 w-8 place-items-center rounded-full border transition ${liked ? "text-pink-600 border-pink-500/40 bg-pink-500/10" : "border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5"}`}
+            className={`grid h-8 w-8 place-items-center rounded-full border transition ${
+              liked ? "text-pink-600 border-pink-500/40 bg-pink-500/10" : "border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5"
+            }`}
             aria-label={liked ? "הסר מלייקים" : "הוסף ללייקים"}
             title={liked ? "הסר מלייקים" : "הוסף ללייקים"}
             onClick={toggleLike}
           >
             {liked ? <Icon.Heart className="h-4 w-4" /> : <Icon.HeartOutline className="h-4 w-4" />}
           </button>
+
           <button
             className="grid h-9 w-9 place-items-center rounded-full bg-emerald-500 text-white hover:bg-emerald-600 transition shadow"
             onClick={togglePlay}
@@ -166,7 +191,7 @@ export default function MiniPlayer({ track }: { track: MiniTrack }) {
         </div>
       </div>
 
-      {/* פס זמן קטן */}
+      {/* פס זמן */}
       <div className="mt-2">
         <input
           type="range"
