@@ -1,34 +1,40 @@
+// src/app/api/auth/signup/route.ts
 import { NextResponse } from "next/server";
-import clientPromise from "@/lib/mongodb";
-import bcrypt from "bcrypt";
+import clientPromise from "@/lib/mongodb"; // אם אצלך זה "@/lib/mongo" — תקן בהתאם
+import bcrypt from "bcryptjs";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   const { name, email, password } = await req.json();
-  if (!email || !password) {
+
+  if (!name || !email || !password) {
     return NextResponse.json(
       { ok: false, error: "Missing fields" },
       { status: 400 }
     );
   }
-  const em = String(email).toLowerCase().trim();
 
   const client = await clientPromise;
   const db = client.db();
+  const users = db.collection("users");
 
-  const exists = await db.collection("users").findOne({ email: em });
-  if (exists)
+  const exists = await users.findOne({ email });
+  if (exists) {
     return NextResponse.json(
-      { ok: false, error: "Email already exists" },
+      { ok: false, error: "Email already registered" },
       { status: 409 }
     );
+  }
 
-  const hash = await bcrypt.hash(password, 12);
-  const { insertedId } = await db.collection("users").insertOne({
-    name: name || "",
-    email: em,
-    password: hash,
-    emailVerified: null,
+  const hashed = await bcrypt.hash(password, 10);
+  await users.insertOne({
+    name,
+    email,
+    password: hashed,
+    createdAt: new Date(),
   });
 
-  return NextResponse.json({ ok: true, id: insertedId.toString() });
+  return NextResponse.json({ ok: true });
 }
