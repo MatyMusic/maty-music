@@ -1,13 +1,15 @@
 // src/app/page.tsx
 "use client";
 
-import { useRef, useState, useEffect, Suspense } from "react";
-import { motion } from "framer-motion";
+import { useRef, useState, useEffect, Suspense, useMemo } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { useTexture, Preload } from "@react-three/drei";
 import * as THREE from "three";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import MiniPlayer, { MiniTrack } from "@/components/MiniPlayer";
+import WhatsAppNudge from "@/components/WhatsAppNudge";
 
 /** ========= נתונים ========= */
 type CategoryKey = "chabad" | "mizrahi" | "soft" | "fun";
@@ -17,7 +19,7 @@ type Cat = {
   imgs: string[];
   href: string;
   blurb: string;
-  track: MiniTrack; // קובץ הדמו למיני־נגן
+  track: MiniTrack;
 };
 
 const CATS: Cat[] = [
@@ -82,7 +84,6 @@ function AvatarPlane({ src, mouseTarget, seed = 0 }: { src: string; mouseTarget:
   const maxAniso = useThree((s) => s.gl.capabilities.getMaxAnisotropy());
 
   useEffect(() => {
-    // Three r179+: להשתמש ב-colorSpace בלבד
     if ("colorSpace" in tex && (THREE as any).SRGBColorSpace) {
       (tex as any).colorSpace = (THREE as any).SRGBColorSpace;
     }
@@ -101,7 +102,7 @@ function AvatarPlane({ src, mouseTarget, seed = 0 }: { src: string; mouseTarget:
   const g = useRef<THREE.Group>(null);
   const cur = useRef(new THREE.Vector2(0, 0));
 
-  useFrame(({ clock }) => {
+  useFrame(({ clock, invalidate }) => {
     if (!g.current) return;
     const t = clock.getElapsedTime() + seed;
     cur.current.lerp(mouseTarget, 0.12);
@@ -116,6 +117,7 @@ function AvatarPlane({ src, mouseTarget, seed = 0 }: { src: string; mouseTarget:
     g.current.rotation.set(rotX, rotY, 0);
     const s = 1 + Math.sin(t * 1.8) * 0.01;
     g.current.scale.set(s, s, 1);
+    invalidate(); // מאחר ו- frameloop="demand" — נדרוש רינדור רק כשיש אנימציה
   });
 
   return (
@@ -130,13 +132,16 @@ function AvatarPlane({ src, mouseTarget, seed = 0 }: { src: string; mouseTarget:
 
 /** ========= קוביית אווטאר עם MiniPlayer ========= */
 function AvatarCard({ cat, i }: { cat: Cat; i: number }) {
+  const reduce = useReducedMotion();
   const boxRef = useRef<HTMLDivElement | null>(null);
   const [tilt, setTilt] = useState({ rx: 0, ry: 0, s: 1 });
   const mouseTarget = useRef(new THREE.Vector2(0, 0));
   const url = useSmartUrl(cat.imgs);
 
+  const isTouch = useMemo(() => typeof window !== "undefined" && "ontouchstart" in window, []);
+
   const onMove = (e: React.MouseEvent) => {
-    if (!boxRef.current) return;
+    if (!boxRef.current || isTouch || reduce) return;
     const r = boxRef.current.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width;
     const py = (e.clientY - r.top) / r.height;
@@ -146,6 +151,7 @@ function AvatarCard({ cat, i }: { cat: Cat; i: number }) {
     setTilt({ rx, ry, s: 1.02 });
   };
   const onLeave = () => {
+    if (reduce) return;
     setTilt({ rx: 0, ry: 0, s: 1 });
     mouseTarget.current.set(0, 0);
   };
@@ -161,16 +167,16 @@ function AvatarCard({ cat, i }: { cat: Cat; i: number }) {
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 28, scale: 0.98 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      initial={reduce ? false : { opacity: 0, y: 28, scale: 0.98 }}
+      whileInView={reduce ? {} : { opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, amount: 0.3 }}
-      transition={{ type: "spring", stiffness: 120, damping: 16, delay: i * 0.06 }}
+      transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 120, damping: 16, delay: i * 0.06 }}
       className="relative"
     >
       <div
         className="relative rounded-3xl p-4 md:p-5 border bg-white/70 dark:bg-neutral-900/70 border-black/10 dark:border-white/10 shadow-md"
         style={{
-          transform: `perspective(1000px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) scale(${tilt.s})`,
+          transform: reduce ? undefined : `perspective(1000px) rotateX(${tilt.rx}deg) rotateY(${tilt.ry}deg) scale(${tilt.s})`,
           transformStyle: "preserve-3d",
         }}
       >
@@ -178,19 +184,21 @@ function AvatarCard({ cat, i }: { cat: Cat; i: number }) {
         <Link
           href={cat.href}
           aria-label={`${cat.label} – ${cat.blurb}`}
-          className="group block cursor-pointer select-none"
+          className="group block cursor-pointer select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 rounded-2xl"
           onClick={() => {
             window.dispatchEvent(new CustomEvent("mm:setCategory", { detail: { category: cat.key } }));
           }}
         >
           {/* הילה מסתובבת */}
-          <motion.div
-            aria-hidden
-            className="pointer-events-none absolute -inset-2 -z-10 rounded-3xl blur-2xl"
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 22 + i * 3, ease: "linear" }}
-            style={{ background: "conic-gradient(from 0deg, rgba(99,102,241,0.35), rgba(236,72,153,0.28), rgba(99,102,241,0.35))" }}
-          />
+          {!reduce && (
+            <motion.div
+              aria-hidden
+              className="pointer-events-none absolute -inset-2 -z-10 rounded-3xl blur-2xl"
+              animate={{ rotate: 360 }}
+              transition={{ repeat: Infinity, duration: 22 + i * 3, ease: "linear" }}
+              style={{ background: "conic-gradient(from 0deg, rgba(99,102,241,0.35), rgba(236,72,153,0.28), rgba(99,102,241,0.35))" }}
+            />
+          )}
           <Hint />
 
           {/* Canvas אזור */}
@@ -201,44 +209,48 @@ function AvatarCard({ cat, i }: { cat: Cat; i: number }) {
             onMouseMove={onMove}
             onMouseLeave={onLeave}
           >
-            <motion.div
-              aria-hidden
-              className="absolute inset-0"
-              animate={{ backgroundPosition: ["0% 0%", "100% 100%"] }}
-              transition={{ repeat: Infinity, duration: 8, ease: "easeInOut" }}
-              style={{
-                backgroundImage:
-                  "radial-gradient(60% 60% at 30% 20%, rgba(255,255,255,0.25), transparent 70%), radial-gradient(50% 50% at 80% 70%, rgba(99,102,241,0.20), transparent 70%)",
-                backgroundSize: "200% 200%",
-              }}
-            />
-            <Canvas
-              className="pointer-events-none absolute inset-0"
-              dpr={[1.25, 2.5]}
-              camera={{ position: [0, 0.7, 2.2], fov: 35 }}
-              gl={{ antialias: true, alpha: true }}
-              onCreated={({ gl }) => {
-                // Three r179+: להשתמש ב-outputColorSpace בלבד
-                if ("outputColorSpace" in gl && (THREE as any).SRGBColorSpace) {
-                  (gl as any).outputColorSpace = (THREE as any).SRGBColorSpace;
-                }
-              }}
-            >
-              <Suspense fallback={null}>
-                {url && <AvatarPlane src={url} mouseTarget={mouseTarget.current} seed={i * 0.7} />}
-                <Preload all />
-              </Suspense>
-            </Canvas>
+            {!reduce && (
+              <>
+                <motion.div
+                  aria-hidden
+                  className="absolute inset-0"
+                  animate={{ backgroundPosition: ["0% 0%", "100% 100%"] }}
+                  transition={{ repeat: Infinity, duration: 8, ease: "easeInOut" }}
+                  style={{
+                    backgroundImage:
+                      "radial-gradient(60% 60% at 30% 20%, rgba(255,255,255,0.25), transparent 70%), radial-gradient(50% 50% at 80% 70%, rgba(99,102,241,0.20), transparent 70%)",
+                    backgroundSize: "200% 200%",
+                  }}
+                />
+                <Canvas
+                  className="pointer-events-none absolute inset-0"
+                  frameloop="demand"
+                  dpr={[1, 2]}
+                  camera={{ position: [0, 0.7, 2.2], fov: 35 }}
+                  gl={{ antialias: true, alpha: true }}
+                  onCreated={({ gl }) => {
+                    if ("outputColorSpace" in gl && (THREE as any).SRGBColorSpace) {
+                      (gl as any).outputColorSpace = (THREE as any).SRGBColorSpace;
+                    }
+                  }}
+                >
+                  <Suspense fallback={null}>
+                    {url && <AvatarPlane src={url} mouseTarget={mouseTarget.current} seed={i * 0.7} />}
+                    <Preload all />
+                  </Suspense>
+                </Canvas>
 
-            {/* “שיין” בזמן ריחוף */}
-            <motion.span aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden" whileHover="shine">
-              <motion.span
-                variants={{ shine: { x: ["-40%", "140%"] } }}
-                transition={{ type: "tween", duration: 1.8, ease: "easeInOut", repeat: Infinity }}
-                className="absolute -left-1/3 top-0 h-full w-1/2 rotate-12"
-                style={{ background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.35) 50%, rgba(255,255,255,0) 100%)" }}
-              />
-            </motion.span>
+                {/* “שיין” בזמן ריחוף */}
+                <motion.span aria-hidden className="pointer-events-none absolute inset-0 rounded-2xl overflow-hidden" whileHover="shine">
+                  <motion.span
+                    variants={{ shine: { x: ["-40%", "140%"] } }}
+                    transition={{ type: "tween", duration: 1.8, ease: "easeInOut", repeat: Infinity }}
+                    className="absolute -left-1/3 top-0 h-full w-1/2 rotate-12"
+                    style={{ background: "linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,.35) 50%, rgba(255,255,255,0) 100%)" }}
+                  />
+                </motion.span>
+              </>
+            )}
           </div>
 
           {/* טקסט תחתון קטן (עדיין בתוך ה־Link) */}
@@ -257,7 +269,7 @@ function AvatarCard({ cat, i }: { cat: Cat; i: number }) {
   );
 }
 
-/** ========= CTA תחתון (כדוגמה; אפשר להשאיר/להסיר) ========= */
+/** ========= CTA תחתון ========= */
 const CTAS = [
   { href: "/events",  title: "אירועים",     subtitle: "חתונות, בר/בת מצווה, הופעות חיות", emoji: "🎤" },
   { href: "/pricing", title: "מחירון",      subtitle: "חבילות גמישות לכל כיס",           emoji: "💳" },
@@ -266,26 +278,30 @@ const CTAS = [
 ] as const;
 
 function FancyCard({ href, title, subtitle, emoji, i }: (typeof CTAS)[number] & { i: number }) {
-  const isPricing = href === "/pricing";
+  const reduce = useReducedMotion();
+  const baseMotion = reduce ? {} : { rotate: 360 };
   return (
     <motion.div
-      initial={{ opacity: 0, y: 22, scale: 0.985 }}
-      whileInView={{ opacity: 1, y: 0, scale: 1 }}
+      initial={reduce ? false : { opacity: 0, y: 22, scale: 0.985 }}
+      whileInView={reduce ? {} : { opacity: 1, y: 0, scale: 1 }}
       viewport={{ once: true, amount: 0.35 }}
-      transition={{ type: "spring", stiffness: 120, damping: 16, delay: i * 0.05 }}
+      transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 120, damping: 16, delay: i * 0.05 }}
       className="relative"
     >
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute -inset-2 -z-10 rounded-3xl blur-2xl"
-        animate={{ rotate: 360 }}
-        transition={{ repeat: Infinity, duration: 24 + i * 4, ease: "linear" }}
-        style={{
-          background: isPricing
-            ? "conic-gradient(from 0deg, rgba(99,102,241,0.45), rgba(236,72,153,0.35), rgba(99,102,241,0.45))"
-            : "radial-gradient(closest-side, rgba(99,102,241,0.25), rgba(99,102,241,0) 70%)",
-        }}
-      />
+      {!reduce && (
+        <motion.div
+          aria-hidden
+          className="pointer-events-none absolute -inset-2 -z-10 rounded-3xl blur-2xl"
+          animate={baseMotion}
+          transition={{ repeat: Infinity, duration: 24 + i * 4, ease: "linear" }}
+          style={{
+            background:
+              href === "/pricing"
+                ? "conic-gradient(from 0deg, rgba(99,102,241,0.45), rgba(236,72,153,0.35), rgba(99,102,241,0.45))"
+                : "radial-gradient(closest-side, rgba(99,102,241,0.25), rgba(99,102,241,0) 70%)",
+          }}
+        />
+      )}
       <Link
         href={href}
         className="group block rounded-2xl border p-5 shadow-md backdrop-blur transition-all bg-white/70 dark:bg-neutral-900/70 border-black/10 dark:border-white/10 hover:shadow-lg hover:scale-[1.01]"
@@ -320,6 +336,9 @@ function FancyCard({ href, title, subtitle, emoji, i }: (typeof CTAS)[number] & 
 export default function HomePage() {
   return (
     <main dir="rtl" className="relative">
+      {/* בועת וואטסאפ צפה ל-20 שניות, עם השתקה ל-24ש' */}
+      <WhatsAppNudge showForMs={20000} coolDownHours={24} position="top" />
+
       {/* HERO – גריד 2x2 של קוביות תלת־מימד (עם מיני־נגן בכל קובייה) */}
       <section className="relative z-0 mx-auto max-w-6xl px-4 pt-8">
         <h1 className="sr-only">MATY MUSIC</h1>
@@ -328,7 +347,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA תחתון (לא חובה) */}
+      {/* CTA תחתון */}
       <section className="relative z-10 mx-auto max-w-6xl px-4 py-10 md:py-14">
         <div className="mb-6 text-right">
           <motion.h2 initial={{ opacity: 0, y: 12 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, amount: 0.5 }} transition={{ duration: 0.5 }} className="text-2xl font-extrabold md:text-3xl">

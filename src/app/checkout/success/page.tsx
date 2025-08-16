@@ -1,31 +1,26 @@
 // src/app/checkout/success/page.tsx
-import Link from "next/link";
+export const metadata = { title: "תודה! התשלום התקבל" };
 
-type SP = Record<string, string | string[] | undefined>;
+type Search = { token?: string; PayerID?: string };
 
 export default async function SuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<SP>;
+  searchParams?: Search | Promise<Search>;
 }) {
-  const sp = await searchParams;
-  const token = (sp.token as string) ?? "";
-  const payerId = (sp.PayerID as string) ?? "";
+  const sp: Search =
+    searchParams && typeof (searchParams as any)?.then === "function"
+      ? await (searchParams as Promise<Search>)
+      : ((searchParams ?? {}) as Search);
 
   return (
     <section className="section-padding">
       <div className="container-section">
         <div className="card text-right">
-          <h1 className="text-2xl md:text-3xl font-extrabold mb-2">התשלום התקבל ✅</h1>
-          <p className="opacity-80">
-            תודה! אנו מעבדים את ההזמנה שלך. מספר אסימון:{" "}
-            <b dir="ltr">{token || "—"}</b>, מזהה משלם: <b dir="ltr">{payerId || "—"}</b>
-          </p>
-
-          <div className="mt-6 flex gap-2 justify-end">
-            <Link href="/dashboard" className="btn">ללוח הבקרה</Link>
-            <Link href="/" className="btn border">חזרה לדף הבית</Link>
-          </div>
+          <h1 className="text-3xl font-extrabold mb-2">תודה! התשלום התקבל</h1>
+          <p className="opacity-80">קיבלנו את ההזמנה שלך. נשלח מייל אישור עם פירוט.</p>
+          {sp.token && <p className="mt-2 text-xs opacity-60">אסימון עסקה: {sp.token}</p>}
+          {sp.PayerID && <p className="text-xs opacity-60">PayerID: {sp.PayerID}</p>}
         </div>
       </div>
     </section>

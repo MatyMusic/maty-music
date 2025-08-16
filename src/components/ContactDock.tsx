@@ -1,96 +1,155 @@
 // src/components/ContactDock.tsx
-'use client'
-import { CONTACT } from '@/lib/constants'
-import { ReactNode } from 'react'
+"use client";
 
-function Tip({ children }: { children: ReactNode }) {
-  return (
-    <span
-      className="absolute top-1/2 -translate-y-1/2 -right-2 translate-x-full
-                 whitespace-nowrap text-xs px-2 py-1 rounded-xl
-                 bg-black/80 text-white opacity-0 group-hover:opacity-100
-                 transition-opacity"
-    >
-      {children}
-    </span>
-  )
+import Link from "next/link";
+import { createPortal } from "react-dom";
+import { useEffect, useMemo, useState } from "react";
+
+type Action = {
+  key: "whatsapp" | "phone" | "chat" | "email" | "map";
+  label: string;
+  href: string;
+  target?: "_blank";
+  rel?: string;
+  icon: JSX.Element;
+};
+
+const Ic = {
+  Wa:   (<svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M12 2a10 10 0 00-8.94 14.56L2 22l5.6-1.47A10 10 0 1012 2zm5.4 14.3c-.23.66-1.13 1.21-1.57 1.26-.4.04-.9.06-1.46-.09a10.1 10.1 0 01-4.25-2.17 8.9 8.9 0 01-2.72-3.38c-.28-.74-.3-1.36-.2-1.86.1-.47.73-1.1 1.03-1.13.26-.03.59-.03.9-.03.14 0 .32.02.5.38.19.38.64 1.33.7 1.43.06.1.09.22.02.35-.22.45-.47.73-.6.86-.13.14-.28.3-.12.58.17.28.78 1.29 1.68 2.1 1.16 1.02 2.13 1.35 2.45 1.5.32.16.51.13.7-.06.2-.2.81-.94 1.03-1.26.22-.32.45-.27.75-.16.31.1 1.95.92 2.29 1.09.34.18.57.26.66.41.1.16.1.9-.13 1.56z"/></svg>),
+  Phone:(<svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M6.62 10.79a15.05 15.05 0 006.59 6.59l2.2-2.2a1 1 0 011.05-.24c1.15.38 2.39.59 3.54.59a1 1 0 011 1V21a1 1 0 01-1 1C10.4 22 2 13.6 2 3a1 1 0 011-1h3.47a1 1 0 011 1c0 1.15.2 2.39.59 3.54a1 1 0 01-.25 1.05l-2.2 2.2z"/></svg>),
+  Chat: (<svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M20 2H4a2 2 0 00-2 2v18l4-4h14a2 2 0 002-2V4a2 2 0 00-2-2z"/></svg>),
+  Mail: (<svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M20 4H4a2 2 0 00-2 2v12a2 2 0 002 2h16a2 2 0 002-2V6a2 2 0 00-2-2zm0 4l-8 5L4 8V6l8 5 8-5v2z"/></svg>),
+  Map:  (<svg viewBox="0 0 24 24" className="h-5 w-5" fill="currentColor"><path d="M12 2a7 7 0 00-7 7c0 5.25 7 13 7 13s7-7.75 7-13a7 7 0 00-7-7zm0 9.5A2.5 2.5 0 119.5 9 2.5 2.5 0 0112 11.5z"/></svg>),
+};
+
+const isExternal = (href: string) => /^(https?:|tel:|mailto:)/.test(href);
+const SmartLink = (p: { href: string } & React.ComponentProps<"a">) =>
+  isExternal(p.href) ? <a {...p} /> : <Link href={p.href} {...p} />;
+
+function getEnv(name: string, fallback = "") {
+  if (typeof process !== "undefined" && (process as any).env) return (process as any).env[name] ?? fallback;
+  return fallback;
 }
 
 export default function ContactDock() {
-  const mailto = `mailto:${CONTACT.email}?subject=${CONTACT.emailSubject}&body=${CONTACT.emailBody}`
+  const [mounted, setMounted] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [lift, setLift] = useState(false);       // מתרומם ליד הפוטר
+  const [compact, setCompact] = useState(false); // קטן בגלילה מטה
 
-  const btn =
-    'group relative flex items-center justify-center w-12 h-12 rounded-full border backdrop-blur ' +
-    'bg-white/90 border-slate-200 shadow-md hover:shadow-lg ' +
-    'dark:bg-white/10 dark:border-white/15 hover:scale-105 transition'
+  // mount + סטטוס הסתרה משומר
+  useEffect(() => {
+    setMounted(true);
+    setHidden(localStorage.getItem("mm_contact_hidden") === "1");
+  }, []);
 
-  const icon = 'w-6 h-6'
+  // מרווח תחתון גלובלי לפי מצב הדוק
+  useEffect(() => {
+    if (!mounted) return;
+    const root = document.documentElement;
+    root.style.setProperty("--contact-dock-h", hidden ? "0px" : "64px");
+    return () => root.style.removeProperty("--contact-dock-h");
+  }, [mounted, hidden]);
 
-  return (
-    <aside
-      className="fixed left-3 top-1/2 -translate-y-1/2 z-[120] flex flex-col gap-2 pointer-events-auto"
-      aria-label="יצירת קשר מהיר"
+  // קומפקט בגלילה מטה
+  useEffect(() => {
+    if (!mounted) return;
+    let lastY = window.scrollY;
+    const onScroll = () => {
+      const y = window.scrollY;
+      setCompact(y > lastY && y > 80);
+      lastY = y;
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, [mounted]);
+
+  // הרמה ליד הפוטר
+  useEffect(() => {
+    if (!mounted) return;
+    const s = document.getElementById("footer-sentinel");
+    if (!s) return;
+    const io = new IntersectionObserver(
+      (entries) => setLift(entries[0]?.isIntersecting ?? false),
+      { rootMargin: "0px 0px -25% 0px" }
+    );
+    io.observe(s);
+    return () => io.disconnect();
+  }, [mounted]);
+
+  const actions: Action[] = useMemo(() => {
+    const wa   = getEnv("NEXT_PUBLIC_WHATSAPP_URL", "/#contact");
+    const tel  = getEnv("NEXT_PUBLIC_PHONE_TEL", "");
+    const mail = getEnv("NEXT_PUBLIC_EMAIL", "");
+    const map  = getEnv("NEXT_PUBLIC_MAPS_URL", "");
+    return [
+      { key: "whatsapp", label: "WhatsApp", href: wa, target: wa.startsWith("http") ? "_blank" : undefined, rel: wa.startsWith("http") ? "noopener" : undefined, icon: Ic.Wa },
+      { key: "phone",    label: "התקשרו",  href: tel ? `tel:${tel}` : "/#contact", icon: Ic.Phone },
+      { key: "chat",     label: "צ'אט",    href: "/#contact", icon: Ic.Chat },
+      { key: "email",    label: "מייל",    href: mail ? `mailto:${mail}` : "/#contact", icon: Ic.Mail },
+      { key: "map",      label: "ניווט",   href: map || "/#contact", target: map ? "_blank" : undefined, rel: map ? "noopener" : undefined, icon: Ic.Map },
+    ];
+  }, []);
+
+  if (!mounted) return null;
+
+  // כפתור החזרה כשמוסתר
+  if (hidden) {
+    return createPortal(
+      <button
+        onClick={() => { setHidden(false); localStorage.removeItem("mm_contact_hidden"); }}
+        className="fixed z-40 inset-x-0 mx-auto w-fit"
+        style={{ bottom: `calc(${lift ? "84px" : "10px"} + env(safe-area-inset-bottom,0px))` }}
+        aria-label="הצג דוק יצירת קשר"
+        title="הצג יצירת קשר"
+      >
+        <span className="grid h-11 w-11 place-items-center rounded-full bg-brand text-white shadow-lg">✉️</span>
+      </button>,
+      document.body
+    );
+  }
+
+  // הדוק עצמו
+  const dock = (
+    <div
+      className="fixed inset-x-0 z-40"
+      dir="rtl"
+      style={{
+        bottom: `calc(${lift ? "84px" : "10px"} + env(safe-area-inset-bottom,0px))`,
+        transition: "bottom .25s ease, transform .2s ease, opacity .2s",
+        transform: compact ? "translateY(18px)" : "translateY(0)",
+        opacity: compact ? 0.88 : 1,
+      }}
     >
-      {/* WhatsApp */}
-      <a
-        href={CONTACT.whatsapp}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={btn}
-        aria-label="ווצאפ"
-        title={`ווצאפ: ${CONTACT.phoneLocal}`}
-      >
-        <svg className={icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M.05 23.39 1.7 17.3A11.42 11.42 0 1 1 4.7 20.3L.05 23.4zM6.6 19a9.42 9.42 0 1 0-2.9-2.9l-.2.3-1 3.8 3.9-1 .2-.2z"/>
-          <path d="M16.6 13.6c-.2-.1-1.3-.6-1.5-.7-.2 0-.3-.1-.5.1-.1.2-.6.7-.7.8-.1.1-.3.2-.6.1a7.6 7.6 0 0 1-3.4-2.1 7.8 7.8 0 0 1-1.6-2.1c-.2-.4 0-.6.1-.7l.4-.5c.2-.2.2-.4.3-.5l.1-.4c0-.1 0-.3 0-.5 0-.2-.5-.4-.6-.4h-.5c-.2 0-.5.1-.7.3A2.2 2.2 0 0 0 6 8.1c0 .3.1.7.2 1 .4 1 .9 1.9 1.6 2.8a12 12 0 0 0 3.7 3.3c.4.2.9.5 1.3.7.5.2 1 .4 1.6.3.4 0 1-.4 1.2-.9.2-.4.2-.8.1-.9 0-.1-.2-.1-.3-.2z"/>
-        </svg>
-        <Tip>ווצאפ: {CONTACT.phoneLocal}</Tip>
-      </a>
+      <nav aria-label="יצירת קשר מהירה" className="mx-auto w-full max-w-md px-3">
+        <div className="relative flex items-center justify-center gap-3 rounded-2xl border border-black/10 dark:border-white/10 bg-white/92 dark:bg-neutral-900/90 backdrop-blur px-2 py-2 shadow-lg">
+          {/* סגירה */}
+          <button
+            onClick={() => { setHidden(true); localStorage.setItem("mm_contact_hidden","1"); }}
+            className="absolute left-1.5 top-1.5 grid h-7 w-7 place-items-center rounded-full border border-black/10 dark:border-white/10 hover:bg-black/5 dark:hover:bg-white/5"
+            title="הסתר"
+            aria-label="הסתר"
+          >
+            <svg viewBox="0 0 24 24" className="h-4 w-4" fill="currentColor"><path d="M18.3 5.71L12 12.01l-6.3-6.3-1.4 1.41 6.29 6.29-6.3 6.3 1.42 1.41 6.3-6.29 6.29 6.29 1.41-1.41-6.29-6.3 6.29-6.29-1.41-1.41z"/></svg>
+          </button>
 
-      {/* Phone */}
-      <a href={`tel:${CONTACT.phoneE164}`} className={btn} aria-label="טלפון" title={`התקשר: ${CONTACT.phoneLocal}`}>
-        <svg className={icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M6.6 10.8a15.3 15.3 0 0 0 6.6 6.6l2.2-2.2c.3-.3.7-.4 1.1-.3 1.2.3 2.6.5 4 .5.6 0 1 .4 1 .9v3.7c0 .6-.4 1-1 1A19.5 19.5 0 0 1 2 4c0-.6.4-1 1-1h3.8c.5 0 .9.4.9 1 0 1.4.2 2.7.5 4 .1.4 0 .8-.3 1.1l-2.3 2.2z"/>
-        </svg>
-        <Tip>התקשר: {CONTACT.phoneLocal}</Tip>
-      </a>
+          {actions.map((a) => (
+            <SmartLink
+              key={a.key}
+              href={a.href}
+              target={a.target}
+              rel={a.rel}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-slate-100/85 dark:bg-neutral-800/75 hover:bg-slate-200/85 dark:hover:bg-neutral-700/75 transition"
+              title={a.label}
+              aria-label={a.label}
+            >
+              <span className="text-slate-800 dark:text-slate-100">{a.icon}</span>
+            </SmartLink>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
 
-      {/* Messenger */}
-      <a
-        href={CONTACT.messenger}
-        target="_blank"
-        rel="noopener noreferrer"
-        className={btn}
-        aria-label="מסנג'ר"
-        title="Messenger"
-      >
-        <svg className={icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 2C6.5 2 2 6 2 10.6c0 2.7 1.5 5 3.8 6.6v4.7l4.2-2.3c.6.1 1.3.2 2 .2 5.5 0 10-4.5 10-9.9S17.5 2 12 2zm.8 9.7L9.8 8.8l-4 3.9L9 9.4l3 2 4.5-2.1-3.7 4.1z"/>
-        </svg>
-        <Tip>Messenger</Tip>
-      </a>
-
-      {/* Email */}
-      <a href={mailto} className={btn} aria-label="מייל" title={CONTACT.email}>
-        <svg className={icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M2 5h20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zm10 6 9-5H3l9 5zm0 2-9-5v8h18v-8l-9 5z"/>
-        </svg>
-        <Tip>{CONTACT.email}</Tip>
-      </a>
-
-      {/* VCF – הוסף לאנשי קשר */}
-      <a
-        href={CONTACT.vcfPath}
-        download
-        className={btn}
-        aria-label="הוסף לאנשי קשר"
-        title="הוסף לאנשי קשר (VCF)"
-      >
-        <svg className={icon} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4zm-7 8a7 7 0 0 1 14 0v1H5zM20 2H8a2 2 0 0 0-2 2v3h2V4h12v16h-3v2h3a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2z"/>
-        </svg>
-        <Tip>הוסף לאנשי קשר</Tip>
-      </a>
-    </aside>
-  )
+  return createPortal(dock, document.body);
 }

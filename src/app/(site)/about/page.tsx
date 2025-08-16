@@ -1,10 +1,11 @@
 // src/app/(site)/about/page.tsx
 import Link from "next/link";
+import Image from "next/image";
 
 export const metadata = {
-  title: 'על MATY-MUSIC',
-  description: 'אודות — מתי גורפינקל (MG) והפרויקט MATY-MUSIC',
-}
+  title: "על MATY-MUSIC",
+  description: "אודות — מתי גורפינקל (MG) והפרויקט MATY-MUSIC",
+};
 
 export default function AboutPage() {
   return (
@@ -48,20 +49,22 @@ export default function AboutPage() {
               </div>
 
               <div className="mt-6 flex flex-wrap justify-end gap-2">
-                {/* שים לב: משתמשים ב-UrlObject כדי לכלול hash */}
-                <Link href={{ pathname: "/", hash: "contact" }} className="btn">צור קשר</Link>
+                <Link href="/contact" className="btn">צור קשר</Link>
                 <Link href={{ pathname: "/", hash: "demos" }} className="btn">דמואים</Link>
               </div>
             </div>
 
-            <img
+            <Image
               src="/assets/logo/mg-mark.svg"
               alt="MG Logo"
+              width={160}
+              height={160}
               className="w-28 md:w-36 h-auto opacity-90"
+              priority
             />
           </div>
         </div>
       </div>
     </section>
-  )
+  );
 }

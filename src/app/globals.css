@@ -1,56 +1,60 @@
-/* src/app/globals.css */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-/* בסיס */
+/* ===== בסיס ===== */
 @layer base {
-  :root {
-    --bg: #0b0b0c;
-    --fg: #ffffff;
+  :root{
+    /* גבהי רכיבים קבועים בתחתית */
+    --contact-dock-h: 64px;     /* גובה דוק "צור קשר" במובייל */
+    --player-h: 0px;            /* יתעדכן דינמית ע"י FloatingPlayer */
+    --safe-bottom: calc(env(safe-area-inset-bottom,0px) + max(var(--contact-dock-h), var(--player-h)) + 10px);
+
+    color-scheme: light dark;
   }
 
-  html[dir="rtl"] {
+  @media (min-width:768px){
+    :root{ --contact-dock-h: 0px; } /* בדסקטופ אין דוק בתחתית */
+  }
+
+  html[dir="rtl"]{
     font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Rubik", sans-serif;
   }
 
-  body {
-    @apply bg-white text-slate-900 dark:bg-black dark:text-slate-100;
+  body{
+    @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: contain; /* פחות קפיצות באפליקציות PWA */
   }
 
-  /* תיקון ספינרים במספרים (כרומיום) */
+  /* קלט מספר – תיקוני דפדפנים */
   input[type="number"]::-webkit-outer-spin-button,
-  input[type="number"]::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-    margin: 0;
-  }
-  /* פיירפוקס */
-  input[type="number"] {
-    -moz-appearance: textfield;
+  input[type="number"]::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  input[type="number"]{ -moz-appearance:textfield; }
+
+  /* מכבדים העדפת משתמש להפחתת תנועה */
+  @media (prefers-reduced-motion: reduce){
+    *, *::before, *::after{ animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
 }
 
-/* קומפוננטות/מחלקות עזר */
+/* ===== קומפוננטות ===== */
 @layer components {
-  /* עזרי פריסה */
-  .container-section { @apply container max-w-6xl px-4 md:px-6; }
-  .section-padding { @apply py-10 md:py-16; }
-  .card { @apply rounded-2xl shadow-lg p-6 bg-white/70 dark:bg-white/5 backdrop-blur; }
-  .btn { @apply inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium border border-slate-300 dark:border-white/10 hover:opacity-90; }
+  .container-section{ @apply container max-w-6xl px-4 md:px-6; }
+  .section-padding{ @apply py-10 md:py-16; }
+  .card{ @apply rounded-2xl shadow-lg p-6 bg-white/70 dark:bg-white/5 backdrop-blur; }
+  .btn{ @apply inline-flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-medium border border-slate-300 dark:border-white/10 hover:opacity-90; }
 
-  /* Inputs RTL/LTR */
-  .input-base {
-    @apply w-full rounded-2xl border px-3 py-2 bg-white/70 dark:bg-white/5
-           border-slate-300 dark:border-white/10
-           focus:outline-none focus:ring-2 focus:ring-brand/60;
+  /* ריווח תחתון "בטוח" לכל הדפים */
+  .safe-bottom{ padding-bottom: var(--safe-bottom); }
+
+  .input-base{
+    @apply w-full rounded-2xl border px-3 py-2 bg-white/70 dark:bg-white/5 border-slate-300 dark:border-white/10 focus:outline-none focus:ring-2 focus:ring-brand/60;
   }
-  .input-rtl { direction: rtl; text-align: right; }
-  .input-ltr { direction: ltr; text-align: left; }
-
-  /* ליתר ביטחון במספרים/טלפון */
-  input[type="number"].input-rtl,
-  input[type="tel"].input-rtl { text-align: right; }
-
-  input[type="number"].input-ltr,
-  input[type="tel"].input-ltr { text-align: left; }
+  .input-rtl{ direction: rtl; text-align: right; }
+  .input-ltr{ direction: ltr; text-align: left; }
 }
+
+/* Portals – מונעים זליגות Layout */
+.drawer-portal,
+.drawer-portal *{ contain: layout style paint; }
