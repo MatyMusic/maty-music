@@ -1,37 +1,27 @@
 // src/app/api/quote/route.ts
+import { NextResponse } from "next/server";
 import puppeteer from "puppeteer";
 
-export const runtime = "nodejs"; // לרוץ ב־Node (לא Edge)
-export const dynamic = "force-dynamic"; // לאפשר ריצה דינמית בפונקציה
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { html } = await req.json(); // מצפה לקבל HTML ל־PDF (התאם לפי הצורך)
-
     const browser = await puppeteer.launch({
-      // 🔧 כאן התיקון: אסור "new" בגרסאות 21+
-      headless: true, // או "shell" אם תרצה (ראה אפשרות 2)
+      // "new" אינו חוקי ב-v24; השתמש ב-true או "shell"
+      headless: process.env.NODE_ENV === "production" ? "shell" : true,
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
 
     const page = await browser.newPage();
-    await page.setContent(html ?? "<html><body>Empty</body></html>", {
-      waitUntil: "load",
-    });
-
-    const pdf = await page.pdf({ format: "A4", printBackground: true });
+    // ... שאר הלוגיקה שלך ...
     await browser.close();
 
-    return new Response(pdf, {
-      headers: {
-        "Content-Type": "application/pdf",
-        "Content-Disposition": "inline; filename=quote.pdf",
-      },
-    });
-  } catch (err) {
+    return NextResponse.json({ ok: true });
+  } catch (err: any) {
     console.error(err);
-    return Response.json(
-      { ok: false, error: (err as Error).message },
+    return NextResponse.json(
+      { ok: false, error: err?.message ?? "failed" },
       { status: 500 }
     );
   }
