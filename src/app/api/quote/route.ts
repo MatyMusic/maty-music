@@ -1,67 +1,70 @@
 // src/app/api/quote/route.ts
-import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/**
- * ברירת מחדל: כבוי בפרוד/פריוויו כדי שהפריסה לא תיפול.
- * אם תרצה להפעיל ב-Vercel, הוסף משתנה סביבה ENABLE_QUOTE_API=1.
- */
-const DISABLED =
-  process.env.DISABLE_QUOTE_API === "1" ||
-  (process.env.VERCEL && process.env.ENABLE_QUOTE_API !== "1");
+type QuoteBody = {
+  html?: string; // אפשר להעביר HTML ליצירת PDF; אם לא, נייצר דף ברירת מחדל
+};
 
-export async function POST(req: NextRequest) {
-  if (DISABLED) {
-    return Response.json(
-      {
-        ok: false,
-        error:
-          "Quote API disabled on this environment. Set ENABLE_QUOTE_API=1 to enable.",
-      },
-      { status: 503 }
+export async function GET() {
+  return new Response("Method Not Allowed", { status: 405 });
+}
+
+export async function POST(req: Request) {
+  // אם תרצה להשבית זמנית בפרודקשן בלי לשבור בילד:
+  if (process.env.NEXT_PUBLIC_DISABLE_QUOTE === "true") {
+    return NextResponse.json(
+      { ok: false, error: "Quote API disabled" },
+      { status: 501 }
     );
   }
 
-  // כדי לא להכביד על הבאנדל של הבילד, טוענים דינמית
-  const puppeteer = await import("puppeteer");
+  // ייבוא דינמי כדי למנוע בעיות בבנייה/בשרתים שאין בהם Chromium בזמן בילד
+  let puppeteer: typeof import("puppeteer");
+  try {
+    puppeteer = await import("puppeteer");
+  } catch {
+    return NextResponse.json(
+      { ok: false, error: "Puppeteer not available on this environment" },
+      { status: 501 }
+    );
+  }
 
-  // חשוב: בלי "new". משתמשים ב-true + דגלים שמתאימים לשרתים סנדבוקס
+  const { html } = (await req.json().catch(() => ({}))) as QuoteBody;
+
   const browser = await puppeteer.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--single-process",
-    ],
+    headless: true, // ← זה התיקון: לא "new" אלא true (או "shell")
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
 
   try {
     const page = await browser.newPage();
+    await page.setContent(
+      html ??
+        `<html lang="he" dir="rtl"><head><meta charset="utf-8" />
+          <style>
+            body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial; padding:24px}
+            h1{margin:0 0 12px}
+            .muted{opacity:.7}
+          </style></head>
+          <body>
+            <h1>MATY MUSIC — הצעת מחיר</h1>
+            <div class="muted">מסמך ברירת מחדל (לא הועבר HTML בבקשה)</div>
+          </body></html>`,
+      { waitUntil: "load" }
+    );
 
-    // דוגמה מינימלית: רנדר ל-PDF. תתאימו לצרכים שלכם.
-    const { html = "<h1>Quote</h1><p>Hello from MATY MUSIC</p>" } =
-      (await req.json().catch(() => ({}))) as { html?: string };
-
-    await page.setContent(String(html), { waitUntil: "networkidle0" });
     const pdf = await page.pdf({ format: "A4", printBackground: true });
 
     return new Response(pdf, {
-      status: 200,
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": 'inline; filename="quote.pdf"',
-        "Cache-Control": "no-store",
       },
     });
   } finally {
-    await browser.close().catch(() => {});
+    await browser.close();
   }
-}
-
-export async function GET() {
-  return Response.json({ ok: true, disabled: !!DISABLED });
 }
